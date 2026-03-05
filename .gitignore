@@ -11,12 +11,6 @@ __pycache__/
 local_settings.py
 media
 
-### Migrations ###
-accounts/migrations/
-cart/migrations/
-home/migrations/
-movies/migrations/
-
 ## Virtual Environments ##
 .venv/
 venv/
