@@ -1,0 +1,285 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+  #map-wrapper {
+    display: flex;
+    height: calc(100vh - 72px);
+  }
+  #map {
+    flex: 1;
+    min-width: 0;
+  }
+  #side-panel {
+    width: 340px;
+    background: #fff;
+    border-left: 1px solid #dee2e6;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: width 0.3s ease;
+  }
+  #side-panel.hidden {
+    width: 0;
+    border: none;
+  }
+  #panel-header {
+    background: #212529;
+    color: #fff;
+    padding: 14px 18px;
+    font-weight: 600;
+    font-size: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #panel-close {
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 1.2rem;
+    line-height: 1;
+  }
+  #panel-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  #panel-body .movie-card {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #panel-body .movie-card .rank {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #212529;
+    margin-right: 12px;
+    min-width: 28px;
+  }
+  #panel-body .movie-card .movie-info {
+    flex: 1;
+  }
+  #panel-body .movie-card .movie-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #212529;
+  }
+  #panel-body .movie-card .checkout-badge {
+    background: #212529;
+    color: #fff;
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+  #panel-placeholder {
+    text-align: center;
+    color: #6c757d;
+    margin-top: 30px;
+  }
+  #map-hint {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(33,37,41,0.85);
+    color: #fff;
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    z-index: 9999;
+    pointer-events: none;
+  }
+  .leaflet-container {
+    font-family: 'Poppins', sans-serif;
+  }
+  .country-tooltip {
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+</style>
+
+<link rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  crossorigin=""></script>
+
+<div id="map-wrapper">
+  <div id="map">
+    <div id="map-hint">Click a country to see its most popular movies</div>
+  </div>
+
+  <div id="side-panel" class="hidden">
+    <div id="panel-header">
+      <span id="panel-country-name">Country</span>
+      <button id="panel-close" title="Close">&times;</button>
+    </div>
+    <div id="panel-body">
+      <div id="panel-placeholder">
+        <i class="fas fa-globe fa-2x mb-3"></i>
+        <p>Select a country on the map.</p>
+      </div>
+      <div id="movie-list" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const GEOJSON_URL =
+  'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson';
+
+const API_BASE = '{% url "maps.country_movies" "XX" %}'.replace('/XX/', '/');
+
+const defaultStyle = {
+  fillColor:   '#4a90d9',
+  weight:       1,
+  opacity:      1,
+  color:       '#fff',
+  fillOpacity:  0.5,
+};
+const hoverStyle  = { weight: 2, color: '#fff', fillOpacity: 0.8, fillColor: '#2171b5' };
+const activeStyle = { weight: 2, color: '#fff', fillOpacity: 0.95, fillColor: '#08306b' };
+
+let map, geojsonLayer, activeLayer = null;
+
+map = L.map('map', {
+  center: [20, 0],
+  zoom: 2,
+  minZoom: 2,
+  maxBounds: [[-90, -200], [90, 200]],
+  maxBoundsViscosity: 1.0,
+});
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+  subdomains: 'abcd',
+  maxZoom: 19,
+}).addTo(map);
+
+fetch(GEOJSON_URL)
+  .then(r => r.json())
+  .then(data => {
+    geojsonLayer = L.geoJSON(data, {
+      style:         defaultStyle,
+      onEachFeature: onEachFeature,
+    }).addTo(map);
+  })
+  .catch(() => {
+    document.getElementById('map-hint').textContent = 'Failed to load world map data.';
+  });
+
+function onEachFeature(feature, layer) {
+  const name = feature.properties.ADMIN || feature.properties.name || 'Unknown';
+  const iso2 = (feature.properties.ISO_A2 || '').toUpperCase();
+
+  layer.bindTooltip(name, {
+    permanent: false,
+    direction: 'auto',
+    className: 'country-tooltip',
+  });
+
+  layer.on({
+    mouseover(e) {
+      if (e.target !== activeLayer) e.target.setStyle(hoverStyle);
+    },
+    mouseout(e) {
+      if (e.target !== activeLayer) e.target.setStyle(defaultStyle);
+    },
+    click(e) {
+      if (activeLayer && activeLayer !== e.target) {
+        activeLayer.setStyle(defaultStyle);
+      }
+      activeLayer = e.target;
+      activeLayer.setStyle(activeStyle);
+      if (iso2 && iso2 !== '-1' && iso2 !== '-99') {
+        loadCountryMovies(iso2, name);
+      } else {
+        showPanel(name, []);
+      }
+    },
+  });
+}
+
+function loadCountryMovies(iso2, countryName) {
+  const url = API_BASE + iso2 + '/';
+  document.getElementById('panel-country-name').textContent = countryName;
+  document.getElementById('panel-placeholder').innerHTML =
+    '<div class="spinner-border spinner-border-sm" role="status"></div> Loading…';
+  document.getElementById('panel-placeholder').style.display = 'block';
+  document.getElementById('movie-list').style.display = 'none';
+  showPanel(countryName, null);
+
+  fetch(url)
+    .then(r => r.json())
+    .then(data => {
+      // API returns a GeoJSON FeatureCollection; extract properties for display
+      const movies = (data.features || []).map(f => f.properties);
+      renderMovies(movies, countryName);
+    })
+    .catch(() => {
+      document.getElementById('panel-placeholder').innerHTML =
+        '<p class="text-danger">Failed to load data.</p>';
+    });
+}
+
+function renderMovies(movies, countryName) {
+  const placeholder = document.getElementById('panel-placeholder');
+  const list       = document.getElementById('movie-list');
+  list.innerHTML   = '';
+
+  if (!movies || movies.length === 0) {
+    placeholder.innerHTML = `
+      <i class="fas fa-film fa-2x mb-3 text-muted"></i>
+      <p>No checkout data yet for <strong>${countryName}</strong>.</p>
+      <small class="text-muted">Users from this country haven't placed orders yet.</small>`;
+    placeholder.style.display = 'block';
+    list.style.display = 'none';
+    return;
+  }
+
+  placeholder.style.display = 'none';
+  list.style.display = 'block';
+
+  movies.forEach((movie, idx) => {
+    const div = document.createElement('div');
+    div.className = 'movie-card';
+    div.innerHTML = `
+      <span class="rank">#${idx + 1}</span>
+      <div class="movie-info">
+        <div class="movie-title">${escHtml(movie.title)}</div>
+      </div>
+      <span class="checkout-badge">
+        <i class="fas fa-shopping-cart me-1"></i>${movie.checkouts}
+      </span>`;
+    list.appendChild(div);
+  });
+}
+
+function showPanel(countryName, movies) {
+  const panel = document.getElementById('side-panel');
+  panel.classList.remove('hidden');
+  document.getElementById('panel-country-name').textContent = countryName;
+  document.getElementById('map-hint').style.display = 'none';
+  if (movies !== null) renderMovies(movies, countryName);
+}
+
+document.getElementById('panel-close').addEventListener('click', () => {
+  document.getElementById('side-panel').classList.add('hidden');
+  document.getElementById('map-hint').style.display = 'block';
+  if (activeLayer) { activeLayer.setStyle(defaultStyle); activeLayer = null; }
+});
+
+function escHtml(str) {
+  const d = document.createElement('div');
+  d.appendChild(document.createTextNode(str));
+  return d.innerHTML;
+}
+</script>
+{% endblock content %}

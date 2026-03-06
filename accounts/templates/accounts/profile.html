@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="p-3 mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow p-3 mb-4 rounded">
+                <div class="card-body">
+                    <h2>My Profile</h2>
+                    <hr />
+                    {% if template_data.success %}
+                    <div class="alert alert-success">{{ template_data.success }}</div>
+                    {% endif %}
+                    <p class="text-muted">
+                        Your nationality determines which country on the
+                        <a href="{% url 'maps.index' %}">World Map</a> your purchases count toward.
+                    </p>
+                    <form method="POST">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="id_nationality" class="form-label fw-semibold">Nationality</label>
+                            {{ template_data.form.nationality }}
+                        </div>
+                        <button type="submit" class="btn bg-dark text-white">
+                            Save Changes
+                        </button>
+                        <a href="{% url 'home.index' %}" class="btn btn-outline-secondary ms-2">Cancel</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
