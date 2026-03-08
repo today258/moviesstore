@@ -164,20 +164,32 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png
 }).addTo(map);
 
 fetch(GEOJSON_URL)
-  .then(r => r.json())
+  .then(r => { if (!r.ok) throw new Error('GeoJSON fetch failed: ' + r.status); return r.json(); })
   .then(data => {
     geojsonLayer = L.geoJSON(data, {
       style:         defaultStyle,
       onEachFeature: onEachFeature,
     }).addTo(map);
+    console.log('World map loaded successfully.');
   })
-  .catch(() => {
+  .catch(err => {
+    console.error('World map load error:', err);
     document.getElementById('map-hint').textContent = 'Failed to load world map data.';
   });
 
 function onEachFeature(feature, layer) {
-  const name = feature.properties.ADMIN || feature.properties.name || 'Unknown';
-  const iso2 = (feature.properties.ISO_A2 || '').toUpperCase();
+  const p    = feature.properties;
+  const name = p.ADMIN || p.name || 'Unknown';
+
+  // geo-countries/Natural Earth sometimes sets ISO_A2 to "-99" for valid countries.
+  // Fallback chain: ISO_A2 → ISO_A2_EH → ISO_A3 (3-letter, backend can resolve) → ADMIN name.
+  const bad  = v => !v || v === '-99' || v === '-1';
+  const iso2 = bad(p.ISO_A2) ? '' : p.ISO_A2.toUpperCase();
+  const iso2eh = bad(p.ISO_A2_EH) ? '' : p.ISO_A2_EH.toUpperCase();
+  const iso3 = (!p.ISO_A3 || p.ISO_A3 === '-99') ? '' : p.ISO_A3.toUpperCase();
+
+  // Best identifier we can send to the backend (2-letter preferred, then 3-letter, then name)
+  const identifier = iso2 || iso2eh || iso3 || name;
 
   layer.bindTooltip(name, {
     permanent: false,
@@ -198,34 +210,31 @@ function onEachFeature(feature, layer) {
       }
       activeLayer = e.target;
       activeLayer.setStyle(activeStyle);
-      if (iso2 && iso2 !== '-1' && iso2 !== '-99') {
-        loadCountryMovies(iso2, name);
-      } else {
-        showPanel(name, []);
-      }
+      loadCountryMovies(identifier, name);
     },
   });
 }
 
-function loadCountryMovies(iso2, countryName) {
-  const url = API_BASE + iso2 + '/';
-  document.getElementById('panel-country-name').textContent = countryName;
-  document.getElementById('panel-placeholder').innerHTML =
-    '<div class="spinner-border spinner-border-sm" role="status"></div> Loading…';
-  document.getElementById('panel-placeholder').style.display = 'block';
-  document.getElementById('movie-list').style.display = 'none';
+function loadCountryMovies(identifier, countryName) {
+  const url = API_BASE + encodeURIComponent(identifier) + '/';
   showPanel(countryName, null);
 
   fetch(url)
-    .then(r => r.json())
+    .then(r => {
+      if (!r.ok) throw new Error(`Server returned ${r.status} for ${url}`);
+      return r.json();
+    })
     .then(data => {
-      // API returns a GeoJSON FeatureCollection; extract properties for display
-      const movies = (data.features || []).map(f => f.properties);
+      if (!data.features) throw new Error('Unexpected API response: missing features key');
+      const movies = data.features.map(f => f.properties);
       renderMovies(movies, countryName);
     })
-    .catch(() => {
+    .catch(err => {
+      console.error('Maps API error:', err);
       document.getElementById('panel-placeholder').innerHTML =
-        '<p class="text-danger">Failed to load data.</p>';
+        `<p class="text-danger"><strong>Error loading data.</strong><br><small>${escHtml(err.message)}</small></p>`;
+      document.getElementById('panel-placeholder').style.display = 'block';
+      document.getElementById('movie-list').style.display = 'none';
     });
 }
 
@@ -237,8 +246,8 @@ function renderMovies(movies, countryName) {
   if (!movies || movies.length === 0) {
     placeholder.innerHTML = `
       <i class="fas fa-film fa-2x mb-3 text-muted"></i>
-      <p>No checkout data yet for <strong>${countryName}</strong>.</p>
-      <small class="text-muted">Users from this country haven't placed orders yet.</small>`;
+      <p>No checkout data yet for <strong>${escHtml(countryName)}</strong>.</p>
+      <small class="text-muted">Tip: sign up with this nationality and make a purchase to see results here.</small>`;
     placeholder.style.display = 'block';
     list.style.display = 'none';
     return;
@@ -267,7 +276,15 @@ function showPanel(countryName, movies) {
   panel.classList.remove('hidden');
   document.getElementById('panel-country-name').textContent = countryName;
   document.getElementById('map-hint').style.display = 'none';
-  if (movies !== null) renderMovies(movies, countryName);
+  if (movies === null) {
+    // Show loading spinner while fetch is in flight
+    document.getElementById('panel-placeholder').innerHTML =
+      '<div class="spinner-border spinner-border-sm" role="status"></div> Loading…';
+    document.getElementById('panel-placeholder').style.display = 'block';
+    document.getElementById('movie-list').style.display = 'none';
+  } else {
+    renderMovies(movies, countryName);
+  }
 }
 
 document.getElementById('panel-close').addEventListener('click', () => {
