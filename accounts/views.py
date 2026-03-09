@@ -5,7 +5,8 @@ from django.shortcuts import redirect
 from django.contrib.auth import login as auth_login, authenticate, logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-
+from django.contrib.admin.views.decorators import staff_member_required
+from django.db.models import Sum
 
 @login_required
 def orders(request):
@@ -52,3 +53,12 @@ def signup(request):
         else:
             template_data['form'] = form
             return render(request, 'accounts/signup.html', {'template_data': template_data})
+
+
+@staff_member_required
+def admin_dashboard(request):
+    users_with_counts = User.objects.annotate(total_movies_purchased=Sum('order__item__quantity', default=0)).order_by('-total_movies_purchased')
+
+    top_user = users_with_counts.first()
+
+    return render(request, 'accounts/admin_dashboard.html', {'top_user': top_user})

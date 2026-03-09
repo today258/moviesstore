@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <h2>Admin Dashboard</h2>
+    <hr>
+
+    <div class="card mt-4 shadow-sm border-primary">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Top User</h5>
+        </div>
+        <div class="card-body">
+            {% if top_user %}
+                <p class="fs-5 mt-2"><strong>Username</strong> <span class="text-primary">{{ top_user.username }}</span></p>
+                <p class="fs-5"><strong>Movies Purchased</strong> {{top_user.total_movies_purchased }}</p>
+            {% else %}
+                <p class="text-muted">No purchases have been made yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock content %}
