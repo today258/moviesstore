@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.admin.views.decorators import staff_member_required
 from django.db.models import Sum, Count
+from movies.models import Movie, Count
 from movies.models import Review
 
 @staff_member_required  # Only admins can access this
@@ -80,9 +81,8 @@ def signup(request):
         if form.is_valid():
             user = form.save()
             nationality = form.cleaned_data.get('nationality') or None
-            # The post_save signal already created the profile; just update it.
-            user.profile.nationality = nationality
-            user.profile.save()
+            # Single INSERT — no signal, no race condition.
+            UserProfile.objects.create(user=user, nationality=nationality)
             return redirect('accounts.login')
         else:
             template_data['form'] = form
@@ -105,29 +105,17 @@ def signup(request):
             auth_login(request, user)
             return redirect('home.index')
 
-def signup(request):
-    template_data = {}
-    template_data['title'] = 'Sign Up'
 
-    if request.method == 'GET':
-        template_data['form'] = CustomUserCreationForm()
-        return render(request, 'accounts/signup.html', {'template_data': template_data})
-    elif request.method == 'POST':
-        form = CustomUserCreationForm(request.POST, error_class=CustomErrorList)
-        if form.is_valid():
-            user = form.save()
-            nationality = form.cleaned_data.get('nationality') or None
-            UserProfile.objects.create(user=user, nationality=nationality)
-            return redirect('accounts.login')
-        else:
-            template_data['form'] = form
-            return render(request, 'accounts/signup.html', {'template_data': template_data})
 
 
 @staff_member_required
 def admin_dashboard(request):
     users_with_counts = User.objects.annotate(total_movies_purchased=Sum('order__item__quantity', default=0)).order_by('-total_movies_purchased')
+    most_ordered_movie = Movie.objects.annotate(num_orders=Count('item')).order_by('-num_orders').first()
+    most_reviewed_movie = Movie.objects.annotate(num_reviews=Count('review')).order_by('-num_reviews').first()
 
     top_user = users_with_counts.first()
 
-    return render(request, 'accounts/admin_dashboard.html', {'top_user': top_user})
+    return render(request, 'accounts/admin_dashboard.html',
+                  {'top_user': top_user, 'most_ordered_movie' : most_ordered_movie,
+                   'most_reviewed_movie' : most_reviewed_movie})
