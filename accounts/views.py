@@ -7,7 +7,21 @@ from django.contrib.auth import login as auth_login, authenticate, logout as aut
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.admin.views.decorators import staff_member_required
-from django.db.models import Sum
+from django.db.models import Sum, Count
+from movies.models import Review
+
+@staff_member_required  # Only admins can access this
+def admin_stats(request):
+    top_commenter = (
+        Review.objects
+        .values('user')   # Groups by username
+        .annotate(comment_count=Count('id'))    # Count the comments per user
+        .order_by('-comment_count')     # Sort the count by descending
+        .first()    # Grab the top count of comments
+    )
+    return render(request, 'admin_stats.html', {
+        'top_commenter': top_commenter
+    })
 
 @login_required
 def orders(request):
