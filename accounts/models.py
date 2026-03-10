@@ -1,7 +1,5 @@
 from django.db import models
 from django.contrib.auth.models import User
-from django.db.models.signals import post_save
-from django.dispatch import receiver
 import pycountry
 
 COUNTRY_CHOICES = sorted(
@@ -21,10 +19,3 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f'{self.user.username} – {self.get_nationality_display() or "No nationality"}'
-
-
-@receiver(post_save, sender=User)
-def create_or_update_user_profile(sender, instance, created, **kwargs):
-    """Auto-create a UserProfile whenever a User is saved (signup, createsuperuser, admin)."""
-    if created:
-        UserProfile.objects.get_or_create(user=instance)

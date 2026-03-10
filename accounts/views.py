@@ -67,9 +67,8 @@ def signup(request):
         if form.is_valid():
             user = form.save()
             nationality = form.cleaned_data.get('nationality') or None
-            # The post_save signal already created the profile; just update it.
-            user.profile.nationality = nationality
-            user.profile.save()
+            # Single INSERT — no signal, no race condition.
+            UserProfile.objects.create(user=user, nationality=nationality)
             return redirect('accounts.login')
         else:
             template_data['form'] = form
@@ -92,23 +91,7 @@ def signup(request):
             auth_login(request, user)
             return redirect('home.index')
 
-def signup(request):
-    template_data = {}
-    template_data['title'] = 'Sign Up'
 
-    if request.method == 'GET':
-        template_data['form'] = CustomUserCreationForm()
-        return render(request, 'accounts/signup.html', {'template_data': template_data})
-    elif request.method == 'POST':
-        form = CustomUserCreationForm(request.POST, error_class=CustomErrorList)
-        if form.is_valid():
-            user = form.save()
-            nationality = form.cleaned_data.get('nationality') or None
-            UserProfile.objects.create(user=user, nationality=nationality)
-            return redirect('accounts.login')
-        else:
-            template_data['form'] = form
-            return render(request, 'accounts/signup.html', {'template_data': template_data})
 
 
 @staff_member_required
