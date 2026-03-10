@@ -16,8 +16,18 @@
             {% else %}
                 <p class="text-muted">No purchases have been made yet.</p>
             {% endif %}
-            {% if request.user.is_staff %}
-            <a href="{% url 'admin_stats' %}">Admin Stats</a>
+        </div>
+    </div>
+    <div class="card mt-4 shadow-sm border-primary">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Top Commenter</h5>
+        </div>
+        <div class="card-body">
+            {% if top_commenter %}
+                <p class="fs-5 mt-2"><strong>User: </strong> <span class="text-primary">{{ top_commenter.username }}</span></p>
+                <p class="fs-5"><strong>Comments Posted: </strong> {{ top_commenter.comment_count }}</p>
+            {% else %}
+                <p class="text-muted">No comments have been posted yet.</p>
             {% endif %}
         </div>
     </div>
