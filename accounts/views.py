@@ -66,9 +66,9 @@ def signup(request):
         if form.is_valid():
             user = form.save()
             nationality = form.cleaned_data.get('nationality') or None
-            profile, _ = UserProfile.objects.get_or_create(user=user)
-            profile.nationality = nationality
-            profile.save()
+            # The post_save signal already created the profile; just update it.
+            user.profile.nationality = nationality
+            user.profile.save()
             return redirect('accounts.login')
         else:
             template_data['form'] = form
