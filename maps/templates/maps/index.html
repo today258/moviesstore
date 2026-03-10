@@ -1,0 +1,302 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+  #map-wrapper {
+    display: flex;
+    height: calc(100vh - 72px);
+  }
+  #map {
+    flex: 1;
+    min-width: 0;
+  }
+  #side-panel {
+    width: 340px;
+    background: #fff;
+    border-left: 1px solid #dee2e6;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: width 0.3s ease;
+  }
+  #side-panel.hidden {
+    width: 0;
+    border: none;
+  }
+  #panel-header {
+    background: #212529;
+    color: #fff;
+    padding: 14px 18px;
+    font-weight: 600;
+    font-size: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #panel-close {
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 1.2rem;
+    line-height: 1;
+  }
+  #panel-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  #panel-body .movie-card {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #panel-body .movie-card .rank {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #212529;
+    margin-right: 12px;
+    min-width: 28px;
+  }
+  #panel-body .movie-card .movie-info {
+    flex: 1;
+  }
+  #panel-body .movie-card .movie-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #212529;
+  }
+  #panel-body .movie-card .checkout-badge {
+    background: #212529;
+    color: #fff;
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+  #panel-placeholder {
+    text-align: center;
+    color: #6c757d;
+    margin-top: 30px;
+  }
+  #map-hint {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(33,37,41,0.85);
+    color: #fff;
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    z-index: 9999;
+    pointer-events: none;
+  }
+  .leaflet-container {
+    font-family: 'Poppins', sans-serif;
+  }
+  .country-tooltip {
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+</style>
+
+<link rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  crossorigin=""></script>
+
+<div id="map-wrapper">
+  <div id="map">
+    <div id="map-hint">Click a country to see its most popular movies</div>
+  </div>
+
+  <div id="side-panel" class="hidden">
+    <div id="panel-header">
+      <span id="panel-country-name">Country</span>
+      <button id="panel-close" title="Close">&times;</button>
+    </div>
+    <div id="panel-body">
+      <div id="panel-placeholder">
+        <i class="fas fa-globe fa-2x mb-3"></i>
+        <p>Select a country on the map.</p>
+      </div>
+      <div id="movie-list" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const GEOJSON_URL =
+  'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson';
+
+const API_BASE = '{% url "maps.country_movies" "XX" %}'.replace('/XX/', '/');
+
+const defaultStyle = {
+  fillColor:   '#4a90d9',
+  weight:       1,
+  opacity:      1,
+  color:       '#fff',
+  fillOpacity:  0.5,
+};
+const hoverStyle  = { weight: 2, color: '#fff', fillOpacity: 0.8, fillColor: '#2171b5' };
+const activeStyle = { weight: 2, color: '#fff', fillOpacity: 0.95, fillColor: '#08306b' };
+
+let map, geojsonLayer, activeLayer = null;
+
+map = L.map('map', {
+  center: [20, 0],
+  zoom: 2,
+  minZoom: 2,
+  maxBounds: [[-90, -200], [90, 200]],
+  maxBoundsViscosity: 1.0,
+});
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+  subdomains: 'abcd',
+  maxZoom: 19,
+}).addTo(map);
+
+fetch(GEOJSON_URL)
+  .then(r => { if (!r.ok) throw new Error('GeoJSON fetch failed: ' + r.status); return r.json(); })
+  .then(data => {
+    geojsonLayer = L.geoJSON(data, {
+      style:         defaultStyle,
+      onEachFeature: onEachFeature,
+    }).addTo(map);
+    console.log('World map loaded successfully.');
+  })
+  .catch(err => {
+    console.error('World map load error:', err);
+    document.getElementById('map-hint').textContent = 'Failed to load world map data.';
+  });
+
+function onEachFeature(feature, layer) {
+  const p    = feature.properties;
+  const name = p.ADMIN || p.name || 'Unknown';
+
+  // geo-countries/Natural Earth sometimes sets ISO_A2 to "-99" for valid countries.
+  // Fallback chain: ISO_A2 → ISO_A2_EH → ISO_A3 (3-letter, backend can resolve) → ADMIN name.
+  const bad  = v => !v || v === '-99' || v === '-1';
+  const iso2 = bad(p.ISO_A2) ? '' : p.ISO_A2.toUpperCase();
+  const iso2eh = bad(p.ISO_A2_EH) ? '' : p.ISO_A2_EH.toUpperCase();
+  const iso3 = (!p.ISO_A3 || p.ISO_A3 === '-99') ? '' : p.ISO_A3.toUpperCase();
+
+  // Best identifier we can send to the backend (2-letter preferred, then 3-letter, then name)
+  const identifier = iso2 || iso2eh || iso3 || name;
+
+  layer.bindTooltip(name, {
+    permanent: false,
+    direction: 'auto',
+    className: 'country-tooltip',
+  });
+
+  layer.on({
+    mouseover(e) {
+      if (e.target !== activeLayer) e.target.setStyle(hoverStyle);
+    },
+    mouseout(e) {
+      if (e.target !== activeLayer) e.target.setStyle(defaultStyle);
+    },
+    click(e) {
+      if (activeLayer && activeLayer !== e.target) {
+        activeLayer.setStyle(defaultStyle);
+      }
+      activeLayer = e.target;
+      activeLayer.setStyle(activeStyle);
+      loadCountryMovies(identifier, name);
+    },
+  });
+}
+
+function loadCountryMovies(identifier, countryName) {
+  const url = API_BASE + encodeURIComponent(identifier) + '/';
+  showPanel(countryName, null);
+
+  fetch(url)
+    .then(r => {
+      if (!r.ok) throw new Error(`Server returned ${r.status} for ${url}`);
+      return r.json();
+    })
+    .then(data => {
+      if (!data.features) throw new Error('Unexpected API response: missing features key');
+      const movies = data.features.map(f => f.properties);
+      renderMovies(movies, countryName);
+    })
+    .catch(err => {
+      console.error('Maps API error:', err);
+      document.getElementById('panel-placeholder').innerHTML =
+        `<p class="text-danger"><strong>Error loading data.</strong><br><small>${escHtml(err.message)}</small></p>`;
+      document.getElementById('panel-placeholder').style.display = 'block';
+      document.getElementById('movie-list').style.display = 'none';
+    });
+}
+
+function renderMovies(movies, countryName) {
+  const placeholder = document.getElementById('panel-placeholder');
+  const list       = document.getElementById('movie-list');
+  list.innerHTML   = '';
+
+  if (!movies || movies.length === 0) {
+    placeholder.innerHTML = `
+      <i class="fas fa-film fa-2x mb-3 text-muted"></i>
+      <p>No checkout data yet for <strong>${escHtml(countryName)}</strong>.</p>
+      <small class="text-muted">Tip: sign up with this nationality and make a purchase to see results here.</small>`;
+    placeholder.style.display = 'block';
+    list.style.display = 'none';
+    return;
+  }
+
+  placeholder.style.display = 'none';
+  list.style.display = 'block';
+
+  movies.forEach((movie, idx) => {
+    const div = document.createElement('div');
+    div.className = 'movie-card';
+    div.innerHTML = `
+      <span class="rank">#${idx + 1}</span>
+      <div class="movie-info">
+        <div class="movie-title">${escHtml(movie.title)}</div>
+      </div>
+      <span class="checkout-badge">
+        <i class="fas fa-shopping-cart me-1"></i>${movie.checkouts}
+      </span>`;
+    list.appendChild(div);
+  });
+}
+
+function showPanel(countryName, movies) {
+  const panel = document.getElementById('side-panel');
+  panel.classList.remove('hidden');
+  document.getElementById('panel-country-name').textContent = countryName;
+  document.getElementById('map-hint').style.display = 'none';
+  if (movies === null) {
+    // Show loading spinner while fetch is in flight
+    document.getElementById('panel-placeholder').innerHTML =
+      '<div class="spinner-border spinner-border-sm" role="status"></div> Loading…';
+    document.getElementById('panel-placeholder').style.display = 'block';
+    document.getElementById('movie-list').style.display = 'none';
+  } else {
+    renderMovies(movies, countryName);
+  }
+}
+
+document.getElementById('panel-close').addEventListener('click', () => {
+  document.getElementById('side-panel').classList.add('hidden');
+  document.getElementById('map-hint').style.display = 'block';
+  if (activeLayer) { activeLayer.setStyle(defaultStyle); activeLayer = null; }
+});
+
+function escHtml(str) {
+  const d = document.createElement('div');
+  d.appendChild(document.createTextNode(str));
+  return d.innerHTML;
+}
+</script>
+{% endblock content %}

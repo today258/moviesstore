@@ -41,7 +41,8 @@ INSTALLED_APPS = [
     'home',
     'movies',
     'accounts',
-    'cart'
+    'cart',
+    'maps',
 ]
 
 MIDDLEWARE = [
@@ -84,6 +85,10 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+# GeoDjango library paths (used by maps app for GeoJSON utilities)
+GDAL_LIBRARY_PATH       = '/opt/homebrew/lib/libgdal.dylib'
+GEOS_LIBRARY_PATH       = '/opt/homebrew/lib/libgeos_c.dylib'
 
 
 # Password validation
