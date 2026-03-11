@@ -11,14 +11,25 @@
                 <form method="POST">
                     {% csrf_token %}
                     <p>
+                        <label for="rating">Rating</label>
+                        <select name="rating" id="rating" class="form-control" required>
+                            <option value="">-- Select a rating --</option>
+                            <option value="1" {% if template_data.review.rating == 1 %} selected {% endif %}>⭐️</option>
+                            <option value="2" {% if template_data.review.rating == 2 %} selected {% endif %}>⭐️⭐️</option>
+                            <option value="3" {% if template_data.review.rating == 3 %} selected {% endif %}>⭐️⭐️⭐️</option>
+                            <option value="4" {% if template_data.review.rating == 4 %} selected {% endif %}>⭐️⭐️⭐️⭐️</option>
+                            <option value="5" {% if template_data.review.rating == 5 %} selected {% endif %}>⭐️⭐️⭐️⭐️⭐️</option>
+                        </select>
+                    </p>
+                    <p>
                         <label for="comment">
                             Comment:
                         </label>
-                        <textarea name="comment" required class="form-control" id="comment">{{template_data.review.comment}}</textarea>
+                        <textarea name="comment" class="form-control" id="comment">{{template_data.review.comment}}</textarea>
                     </p>
                     <div class="text-start">
                         <button type="submit" class="btn bg-dark text-white">
-                            Edit Review
+                            Save
                         </button>
                     </div>
                 </form>
