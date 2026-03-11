@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from .models import Movie, Review
 from django.contrib.auth.decorators import login_required
+from .utils import calculate_average_rating
 
 # Create your views here.
 
@@ -26,13 +27,16 @@ def show(request, id):
     template_data['title'] = movie.name
     template_data['movie'] = movie
     template_data['reviews'] = reviews
+    template_data ['average_rating'] = calculate_average_rating(reviews)
+
     return render(request, 'movies/show.html', {'template_data': template_data})
 
 @login_required
 def create_review(request, id):
-    if request.method == 'POST' and request.POST['comment'] != '':
+    if request.method == 'POST':
         movie = Movie.objects.get(id = id)
         review = Review()
+        review.rating = request.POST.get('rating')
         review.comment = request.POST['comment']
         review.movie = movie
         review.user = request.user
@@ -51,9 +55,10 @@ def edit_review(request, id, review_id):
         template_data['title'] = 'Edit Review'
         template_data['review'] = review
         return render(request, 'movies/edit_review.html', {'template_data': template_data})
-    elif request.method == 'POST' and request.POST['comment'] != '':
+    elif request.method == 'POST':
         review = Review.objects.get(id=review_id)
         review.comment = request.POST['comment']
+        review.rating = int(request.POST.get('rating'))
         review.save()
         return redirect('movies.show', id=id)
     else:
