@@ -10,18 +10,6 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.db.models import Sum, Count
 from movies.models import Movie, Review
 
-@staff_member_required  # Only admins can access this
-def admin_stats(request):
-    top_commenter = (
-        Review.objects
-        .values('user')   # Groups by username
-        .annotate(comment_count=Count('id'))    # Count the comments per user
-        .order_by('-comment_count')     # Sort the count by descending
-        .first()    # Grab the top count of comments
-    )
-    return render(request, 'admin_stats.html', {
-        'top_commenter': top_commenter
-    })
 
 @login_required
 def orders(request):
@@ -112,10 +100,12 @@ def admin_dashboard(request):
     users_with_counts = User.objects.annotate(total_movies_purchased=Sum('order__item__quantity', default = 0)).order_by('-total_movies_purchased')
     most_purchased_movie = Movie.objects.annotate(num_times_purchased=Sum('item__quantity', default = 0)).order_by('-num_times_purchased').first()
     most_reviewed_movie = Movie.objects.annotate(num_reviews=Count('review')).order_by('-num_reviews').first()
+    
+    top_commenter = User.objects.annotate(comment_count=Count('review')).order_by('-comment_count').first() #total_reviews_made
 
     top_user = users_with_counts.first()
 
     return render(request, 'accounts/admin_dashboard.html',
-                  {'top_user': top_user,
+                  {'top_user': top_user, 'most_ordered_movie' : most_purchased_movie,
                    'most_reviewed_movie' : most_reviewed_movie,
-                   'most_purchased_movie' : most_purchased_movie})
+                   'top_commenter': top_commenter})
