@@ -4,4 +4,6 @@ def calculate_average_rating(reviews):
     for review in reviews:
         sum += review.rating
         count += 1
+    if count == 0:
+        return -1
     return round(sum/count, 2)

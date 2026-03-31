@@ -31,7 +31,7 @@
                     </form>
                 </p>
                 <h2>Reviews</h2>
-                <h2>{{template_data.average_rating}} ⭐️</h2>
+                <h3>{% if template_data.average_rating == -1 %} No reviews yet {% else %} {{template_data.average_rating}} ⭐️ {% endif %}</h3>
                                 <hr />
 
                 <ul class="list-group">
